@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "House Rent Manager",
+    "slug": "house-rent-manager",
+    "scheme": "houserentmanager",
+    "version": "1.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "android": {
+      "package": "com.rishi.houserentmanager",
+      "versionCode": 2,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "plugins": [
+      "expo-sqlite",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "House Rent Manager needs access to attach tenant and room photos.",
+          "cameraPermission": "House Rent Manager needs camera access to take tenant and room photos."
+        }
+      ],
+      "expo-document-picker"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "bd5a3472-78f4-4a8b-80be-49360d0152b1"
+      }
+    },
+    "owner": "house-rent-manager-team"
+  }
+}
