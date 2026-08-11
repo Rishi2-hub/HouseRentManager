@@ -7,3 +7,12 @@ dist/
 *.apk
 *.aab
 npm-debug.log*
+
+# Android generated native files
+android/.cxx/
+android/**/.cxx/
+android/build/
+android/app/build/
+.idea/
+*.apk
+*.aab

@@ -7,21 +7,24 @@ Shared-household Android rent management app built with React Native and Expo. U
 - Floors and rooms with photos
 - Tenant details, PP-size photo, and identity documents
 - Citizenship, NID, Passport, Driving Licence, Aadhaar, and other ID types
-- Monthly rent, electricity, water, waste, additional charges, previous due, advance, and payments
+- Nepali monthly bills with the previous BS month selected automatically
+- Electricity calculated from previous unit, current unit, and per-unit cost
+- Tenant advance deposit with remaining-deposit protection during billing
+- Water, waste, additional charges, previous due, advance use, and payments
 - Paid, partial, and due status
-- Automatic AD-to-BS month display on-screen and in PDF bills
+- Nepali month names on-screen and in PDF bills
 - PDF bill creation and sharing
 - Local SQLite storage and a cloud synchronization queue
 - Supabase owner authentication, PostgreSQL schema, private Storage bucket, and row-level security
 - Automatic private upload of queued tenant documents and photos during synchronization
-- Verified-email registration, separate user IDs, login, and email password recovery
+- Verified-email registration, separate user IDs, show/hide password, login, and email password recovery
 - Household invite code with a maximum of four members
 
 ## Setup
 
 1. Install Node.js LTS, Android Studio, and the Expo tooling.
 2. Run `npm install`.
-3. Create a Supabase project and run both SQL files in `supabase/migrations`, in number order.
+3. Create a Supabase project and run all SQL files in `supabase/migrations`, in number order.
 4. Copy `.env.example` to `.env` and enter the project URL and anon key.
 5. Enable email confirmation and add the two redirect URLs described in `SETUP_STEP_BY_STEP.md`.
 6. Run `npx expo start` for development.

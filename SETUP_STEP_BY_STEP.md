@@ -4,7 +4,7 @@
 
 1. Open https://supabase.com/dashboard and select **New project**.
 2. Name it `House Rent Manager`, choose a strong database password and the nearest region.
-3. Open **SQL Editor**. Run `supabase/migrations/001_initial.sql`, then run `002_shared_households.sql`.
+3. Open **SQL Editor**. Run the migration files in number order: `001_initial.sql`, `002_shared_households.sql`, and `003_nepali_billing_and_deposit.sql`.
 4. Open **Project Settings > API** and copy the Project URL and publishable/anon key.
 5. Copy `.env.example` to `.env` and insert those values. Never use the service-role key in the app.
 
@@ -71,5 +71,8 @@ Choose Expo-managed Android credentials. When the build finishes, download the A
 - Join two phones to the same household.
 - Add a floor on phone 1, sync both phones and verify it appears on phone 2.
 - Upload a tenant document and confirm the Storage bucket remains private.
-- Generate a PDF bill and verify AD/BS month, totals, paid amount and balance.
+- In Bhadra, verify the bill form selects Shrawan by default.
+- Enter previous/current electricity readings and verify `(current - previous) × per-unit cost`.
+- Add a tenant advance deposit and verify a bill cannot use more than its available balance.
+- Generate a PDF bill and verify the Nepali month, meter readings, totals, paid amount and balance.
 - Add a record without Wi-Fi, reconnect and synchronize it.
