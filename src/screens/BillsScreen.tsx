@@ -130,6 +130,9 @@ export function BillsScreen({
   const [previousDue, setPreviousDue] =
     useState('0');
 
+  const [previousCredit, setPreviousCredit] =
+    useState('0');
+
   const [advanceUsed, setAdvanceUsed] =
     useState('0');
 
@@ -229,7 +232,8 @@ export function BillsScreen({
         numberValue(waste) +
         numberValue(additional) +
         numberValue(previousDue) -
-        numberValue(advanceUsed)
+        numberValue(advanceUsed) -
+        numberValue(previousCredit)
     );
 
   const calculatedBalance =
@@ -334,6 +338,27 @@ export function BillsScreen({
     const latestBill =
       previousBills[0];
 
+    /*
+     * Auto-fill next month's credit from any overpayment
+     * on the tenant's most recent bill (paid more than the
+     * total). This carries the excess forward automatically.
+     * The owner can still edit the value before saving.
+     */
+    const carriedCredit =
+      Math.max(
+        0,
+        Number(
+          latestBill?.paid_amount || 0
+        ) -
+          Number(
+            latestBill?.total || 0
+          )
+      );
+
+    setPreviousCredit(
+      String(carriedCredit)
+    );
+
     const latestReading =
       latestBill
         ?.current_electricity_unit ??
@@ -376,6 +401,7 @@ export function BillsScreen({
     setWaste('0');
     setAdditional('0');
     setPreviousDue('0');
+    setPreviousCredit('0');
     setAdvanceUsed('0');
     setPaidAmount('0');
   }
@@ -465,6 +491,12 @@ export function BillsScreen({
       String(bill.previous_due)
     );
 
+    setPreviousCredit(
+      String(
+        bill.previous_credit ?? 0
+      )
+    );
+
     setAdvanceUsed(
       String(bill.advance_used)
     );
@@ -524,6 +556,11 @@ export function BillsScreen({
     const depositUsed =
       numberValue(
         advanceUsed
+      );
+
+    const creditApplied =
+      numberValue(
+        previousCredit
       );
 
     const amountPaid =
@@ -601,6 +638,13 @@ export function BillsScreen({
       );
     }
 
+    if (creditApplied < 0) {
+      return Alert.alert(
+        'Invalid previous credit',
+        'Previous month credit cannot be negative.'
+      );
+    }
+
     if (amountPaid < 0) {
       return Alert.alert(
         'Invalid paid amount',
@@ -630,6 +674,8 @@ export function BillsScreen({
       month_days:
         totalDaysInMonth,
 
+      previous_credit: creditApplied,
+
       rent:
         rentAmount,
 
@@ -654,6 +700,7 @@ export function BillsScreen({
       previous_due:
         numberValue(previousDue),
 
+      
       advance_used:
         depositUsed,
 
@@ -1090,6 +1137,18 @@ export function BillsScreen({
               <span>
                 NPR ${Number(
                   bill.previous_due
+                ).toLocaleString()}
+              </span>
+            </div>
+
+            <div class="row">
+              <span>
+                Previous month credit
+              </span>
+
+              <span>
+                NPR ${Number(
+                  bill.previous_credit || 0
                 ).toLocaleString()}
               </span>
             </div>
@@ -1655,6 +1714,19 @@ export function BillsScreen({
               keyboardType="numeric"
             />
           </View>
+
+          <View style={styles.halfInput}>
+            <Label>
+              Previous month credit
+            </Label>
+
+            <Input
+              value={previousCredit}
+              onChangeText={setPreviousCredit}
+              keyboardType="numeric"
+              placeholder="0"
+            />
+          </View>
         </View>
 
         <Label>
@@ -1873,6 +1945,15 @@ export function BillsScreen({
                   {' · '}NPR{' '}
                   {Number(
                     bill.electricity
+                  ).toLocaleString()}
+                </Text>
+
+                <Text
+                  style={styles.billStatus}
+                >
+                  Previous month credit: NPR{' '}
+                  {Number(
+                    bill.previous_credit || 0
                   ).toLocaleString()}
                 </Text>
 

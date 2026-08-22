@@ -20,6 +20,74 @@ function safeFileName(
   );
 }
 
+
+function inferMimeType(
+  fileName?: string,
+  uri?: string,
+  providedType?: string | null,
+  fallbackType?: string
+): string {
+  const normalizedType =
+    providedType
+      ?.split(';')[0]
+      .trim()
+      .toLowerCase();
+
+  if (
+    normalizedType &&
+    normalizedType !==
+      'application/octet-stream'
+  ) {
+    return normalizedType;
+  }
+
+  const source =
+    `${fileName ?? ''} ${uri ?? ''}`
+      .split('?')[0]
+      .toLowerCase();
+
+  if (
+    source.includes('.jpg') ||
+    source.includes('.jpeg')
+  ) {
+    return 'image/jpeg';
+  }
+
+  if (source.includes('.png')) {
+    return 'image/png';
+  }
+
+  if (source.includes('.pdf')) {
+    return 'application/pdf';
+  }
+
+  if (fallbackType) {
+    return fallbackType;
+  }
+
+  throw new Error(
+    'Unsupported file type. Please use JPG, PNG, or PDF.'
+  );
+}
+
+function isNetworkFailure(
+  error: unknown
+): boolean {
+  const message =
+    error instanceof Error
+      ? error.message.toLowerCase()
+      : String(error).toLowerCase();
+
+  return (
+    message.includes('unknownhost') ||
+    message.includes(
+      'unable to resolve host'
+    ) ||
+    message.includes('network request failed') ||
+    message.includes('fetch failed')
+  );
+}
+
 function isLocalFile(
   uri: unknown
 ): boolean {
@@ -71,11 +139,17 @@ async function uploadPrivateFile(
     await response.arrayBuffer();
 
   const contentType =
-    mimeType ||
-    response.headers.get(
-      'content-type'
-    ) ||
-    'application/octet-stream';
+    inferMimeType(
+      fileName,
+      uri,
+      mimeType ||
+        response.headers.get(
+          'content-type'
+        ),
+      entity === 'documents'
+        ? undefined
+        : 'image/jpeg'
+    );
 
   const { error } =
     await supabase.storage
@@ -144,7 +218,7 @@ async function loadCloudRecords() {
   return cloudData;
 }
 
-export async function syncPending() {
+async function runSyncPending() {
   if (
     !cloudConfigured ||
     !supabase
@@ -209,9 +283,54 @@ export async function syncPending() {
   const queueItems =
     await getQueue();
 
-  let syncedCount = 0;
+  // Upserts must create parents before children.
+  // Deletes use the reverse dependency order.
+  const upsertPriority: Record<
+    string,
+    number
+  > = {
+    floors: 1,
+    rooms: 2,
+    tenants: 3,
+    documents: 4,
+    bills: 5,
+  };
 
-  for (const item of queueItems) {
+  const deletePriority: Record<
+    string,
+    number
+  > = {
+    bills: 1,
+    documents: 1,
+    tenants: 2,
+    rooms: 3,
+    floors: 4,
+  };
+
+  const orderedQueueItems = [
+    ...queueItems,
+  ].sort((a, b) => {
+    const priorityA =
+      a.operation === 'delete'
+        ? deletePriority[a.entity] ?? 99
+        : upsertPriority[a.entity] ?? 99;
+
+    const priorityB =
+      b.operation === 'delete'
+        ? deletePriority[b.entity] ?? 99
+        : upsertPriority[b.entity] ?? 99;
+
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB;
+    }
+
+    return Number(a.id) - Number(b.id);
+  });
+
+  let syncedCount = 0;
+  let stoppedForNetwork = false;
+
+  for (const item of orderedQueueItems) {
     try {
       // ==========================================
       // DELETE FROM SUPABASE
@@ -256,7 +375,8 @@ export async function syncPending() {
         ...cloudRecord
       } = payload;
 
-      // Upload tenant documents.
+      // Upload tenant documents before inserting the
+      // document row because remote_path belongs to that row.
       if (
         item.entity ===
           'documents' &&
@@ -278,29 +398,168 @@ export async function syncPending() {
         delete cloudRecord.local_uri;
       }
 
-      // Upload floor, room or tenant photos.
-      if (
+      // Never send an Android file:// or content:// URI to
+      // Supabase. First create/update the database row without
+      // the local photo path. This is especially important for
+      // tenants: bills and documents can then reference the
+      // tenant even if its photo upload needs to be retried.
+      const localPhotoUri =
         cloudRecord.photo_uri &&
         isLocalFile(
           cloudRecord.photo_uri
         )
-      ) {
-        cloudRecord.photo_uri =
+          ? cloudRecord.photo_uri
+          : null;
+
+      if (localPhotoUri) {
+        delete cloudRecord.photo_uri;
+      }
+
+      // Bills have a second database uniqueness rule:
+      // one bill per tenant per bill_month. Some older cloud data can
+      // already contain the same business bill under a different id.
+      // Resolve that explicitly instead of relying on PostgreSQL's
+      // ON CONFLICT inference, which avoids error 23505.
+      if (item.entity === 'bills') {
+        const {
+          data: existingBill,
+          error: lookupError,
+        } = await supabase
+          .from('bills')
+          .select('id')
+          .eq(
+            'tenant_id',
+            cloudRecord.tenant_id
+          )
+          .eq(
+            'bill_month',
+            cloudRecord.bill_month
+          )
+          .maybeSingle();
+
+        if (lookupError) {
+          throw lookupError;
+        }
+
+        if (
+          existingBill?.id &&
+          existingBill.id !==
+            cloudRecord.id
+        ) {
+          // Keep the cloud row's existing primary key. Updating its
+          // other columns removes the tenant/month duplicate safely.
+          const {
+            id: _localBillId,
+            ...billUpdate
+          } = cloudRecord;
+
+          const { error: updateError } =
+            await supabase
+              .from('bills')
+              .update(billUpdate)
+              .eq(
+                'id',
+                existingBill.id
+              );
+
+          if (updateError) {
+            throw updateError;
+          }
+        } else {
+          const { error: billError } =
+            await supabase
+              .from('bills')
+              .upsert(cloudRecord);
+
+          if (billError) {
+            // Another sync/device may have inserted the same
+            // tenant/month after our lookup. Recover once from
+            // PostgreSQL unique-constraint error 23505.
+            if (billError.code === '23505') {
+              const {
+                data: racedBill,
+                error: racedLookupError,
+              } = await supabase
+                .from('bills')
+                .select('id')
+                .eq(
+                  'tenant_id',
+                  cloudRecord.tenant_id
+                )
+                .eq(
+                  'bill_month',
+                  cloudRecord.bill_month
+                )
+                .maybeSingle();
+
+              if (
+                racedLookupError ||
+                !racedBill?.id
+              ) {
+                throw (
+                  racedLookupError ||
+                  billError
+                );
+              }
+
+              const {
+                id: _localBillId,
+                ...billUpdate
+              } = cloudRecord;
+
+              const {
+                error: racedUpdateError,
+              } = await supabase
+                .from('bills')
+                .update(billUpdate)
+                .eq('id', racedBill.id);
+
+              if (racedUpdateError) {
+                throw racedUpdateError;
+              }
+            } else {
+              throw billError;
+            }
+          }
+        }
+      } else {
+        const { error } =
+          await supabase
+            .from(item.entity)
+            .upsert(cloudRecord);
+
+        if (error) {
+          throw error;
+        }
+      }
+
+      // Upload a local floor/room/tenant photo only after its
+      // cloud row exists. Android often reports local images as
+      // application/octet-stream, so force a safe image type
+      // when no usable MIME type can be detected.
+      if (localPhotoUri) {
+        const photoPath =
           await uploadPrivateFile(
             membership.household_id,
             item.entity,
             cloudRecord.id,
-            cloudRecord.photo_uri
+            localPhotoUri,
+            `${item.entity}-${cloudRecord.id}.jpg`,
+            'image/jpeg'
           );
-      }
 
-      const { error } =
-        await supabase
+        const {
+          error: photoUpdateError,
+        } = await supabase
           .from(item.entity)
-          .upsert(cloudRecord);
+          .update({
+            photo_uri: photoPath,
+          })
+          .eq('id', cloudRecord.id);
 
-      if (error) {
-        throw error;
+        if (photoUpdateError) {
+          throw photoUpdateError;
+        }
       }
 
       await markSynced(
@@ -311,8 +570,16 @@ export async function syncPending() {
 
       syncedCount += 1;
     } catch (error) {
-      // Keep failed records in the queue.
-      // They will be retried next time.
+      // Keep failed records in the queue so they can be retried.
+      if (isNetworkFailure(error)) {
+        stoppedForNetwork = true;
+        console.error(
+          'Synchronization paused because the network or DNS is unavailable:',
+          error
+        );
+        break;
+      }
+
       console.error(
         `Synchronization failed for ${item.entity}:`,
         error
@@ -321,8 +588,16 @@ export async function syncPending() {
   }
 
   const pendingCount =
-    queueItems.length -
+    orderedQueueItems.length -
     syncedCount;
+
+  if (stoppedForNetwork) {
+    return {
+      synced: syncedCount,
+      message:
+        'Network unavailable. Pending changes are saved and will retry later.',
+    };
+  }
 
   // Refresh local records only when
   // every queued change was synchronized.
@@ -363,4 +638,26 @@ export async function syncPending() {
     message:
       `${syncedCount} change(s) synced; shared records refreshed`,
   };
+}
+
+// Prevent two screens/effects from running the same queue at the
+// same time. Concurrent syncs can both see a missing bill and race
+// to insert the same tenant/month, which produces PostgreSQL 23505.
+let activeSync: Promise<{
+  synced: number;
+  message: string;
+}> | null = null;
+
+export function syncPending() {
+  if (activeSync) {
+    return activeSync;
+  }
+
+  activeSync = runSyncPending().finally(
+    () => {
+      activeSync = null;
+    }
+  );
+
+  return activeSync;
 }

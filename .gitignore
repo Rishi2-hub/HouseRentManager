@@ -16,3 +16,8 @@ android/app/build/
 .idea/
 *.apk
 *.aab
+
+# Local backups
+android_backup/
+*.orig.ts
+README.txt

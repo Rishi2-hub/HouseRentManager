@@ -67,6 +67,7 @@ export type Bill = {
   waste: number;
   additional: number;
   previous_due: number;
+  previous_credit: number;
   advance_used: number;
   paid_amount: number;
   total: number;

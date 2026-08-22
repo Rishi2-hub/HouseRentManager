@@ -1,1 +1,37 @@
-{"expo":{"name":"House Rent Manager","slug":"house-rent-manager","scheme":"houserentmanager","version":"1.1.0","orientation":"portrait","userInterfaceStyle":"light","android":{"package":"com.rishi.houserentmanager","versionCode":2,"permissions":["CAMERA","READ_MEDIA_IMAGES"]},"plugins":["expo-sqlite",["expo-image-picker",{"photosPermission":"House Rent Manager needs access to attach tenant and room photos.","cameraPermission":"House Rent Manager needs camera access to take tenant and room photos."}],"expo-document-picker"],"extra":{"eas":{"projectId":"REPLACE_WITH_EAS_PROJECT_ID"}}}}
+{
+  "expo": {
+    "name": "House Rent Manager",
+    "slug": "house-rent-manager",
+    "scheme": "houserentmanager",
+    "version": "1.2.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+
+    "android": {
+      "package": "com.rishi.houserentmanager",
+      "versionCode": 14,
+      "permissions": [
+        "CAMERA",
+        "READ_MEDIA_IMAGES"
+      ]
+    },
+
+    "plugins": [
+      "expo-sqlite",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "House Rent Manager needs access to attach tenant and room photos.",
+          "cameraPermission": "House Rent Manager needs camera access to take tenant and room photos."
+        }
+      ],
+      "expo-document-picker"
+    ],
+
+    "extra": {
+      "eas": {
+        "projectId": "REPLACE_WITH_EAS_PROJECT_ID"
+      }
+    }
+  }
+}

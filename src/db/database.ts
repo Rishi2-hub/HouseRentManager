@@ -14,6 +14,7 @@ import {
 
 let db: SQLite.SQLiteDatabase;
 let dbScope = '';
+let refreshPromise: Promise<void> | null = null;
 
 async function ensureColumn(
   table: string,
@@ -60,6 +61,7 @@ export async function initDb(
   await db.execAsync(`
     PRAGMA journal_mode = WAL;
     PRAGMA foreign_keys = ON;
+    PRAGMA busy_timeout = 5000;
 
     CREATE TABLE IF NOT EXISTS floors (
       id TEXT PRIMARY KEY,
@@ -147,6 +149,7 @@ export async function initDb(
       waste REAL NOT NULL DEFAULT 0,
       additional REAL NOT NULL DEFAULT 0,
       previous_due REAL NOT NULL DEFAULT 0,
+      previous_credit REAL NOT NULL DEFAULT 0,
       advance_used REAL NOT NULL DEFAULT 0,
       paid_amount REAL NOT NULL DEFAULT 0,
       total REAL NOT NULL,
@@ -215,6 +218,12 @@ export async function initDb(
     'month_days',
     'INTEGER NOT NULL DEFAULT 0'
   );
+
+  await ensureColumn(
+    'bills',
+    'previous_credit',
+    'REAL NOT NULL DEFAULT 0'
+  );
 }
 
 /**
@@ -229,34 +238,32 @@ export async function refreshDbConnection() {
     );
   }
 
-  const previousDatabase = db;
+  if (refreshPromise) {
+    return refreshPromise;
+  }
 
-  const freshDatabase =
-    await SQLite.openDatabaseAsync(
-      `house-rent-manager-${dbScope}.db`,
-      {
-        useNewConnection: true,
-      }
-    );
-
-  await freshDatabase.execAsync(`
-    PRAGMA journal_mode = WAL;
-    PRAGMA foreign_keys = ON;
-  `);
-
-  db = freshDatabase;
-
-  if (previousDatabase) {
-    try {
-      await previousDatabase.closeAsync();
-    } catch (error) {
-      // The previous Android native handle may already be
-      // invalid. The fresh connection above is now active.
-      console.warn(
-        'Previous SQLite connection was already unavailable:',
-        error
+  refreshPromise = (async () => {
+    const freshDatabase =
+      await SQLite.openDatabaseAsync(
+        `house-rent-manager-${dbScope}.db`,
+        {
+          useNewConnection: true,
+        }
       );
-    }
+
+    await freshDatabase.execAsync(`
+      PRAGMA journal_mode = WAL;
+      PRAGMA foreign_keys = ON;
+      PRAGMA busy_timeout = 5000;
+    `);
+
+    db = freshDatabase;
+  })();
+
+  try {
+    await refreshPromise;
+  } finally {
+    refreshPromise = null;
   }
 }
 
@@ -266,19 +273,32 @@ async function queueOperation(
   operation: 'upsert' | 'delete',
   payload: unknown
 ) {
-  await db.runAsync(
-    `INSERT INTO sync_queue(
-      entity,
-      entity_id,
-      operation,
-      payload,
-      created_at
-    ) VALUES (?, ?, ?, ?, ?)`,
-    entity,
-    id,
-    operation,
-    JSON.stringify(payload),
-    now()
+  // Only the newest pending operation for one local row is needed.
+  // This prevents a long queue of repeated edits from being retried.
+  await db.withTransactionAsync(
+    async () => {
+      await db.runAsync(
+        `DELETE FROM sync_queue
+         WHERE entity = ? AND entity_id = ?`,
+        entity,
+        id
+      );
+
+      await db.runAsync(
+        `INSERT INTO sync_queue(
+          entity,
+          entity_id,
+          operation,
+          payload,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?)`,
+        entity,
+        id,
+        operation,
+        JSON.stringify(payload),
+        now()
+      );
+    }
   );
 }
 
@@ -903,7 +923,7 @@ export async function addDocument(values: {
 
 type BillInput = Omit<
   Bill,
-  | 'id'
+  'id'
   | 'electricity'
   | 'total'
   | 'balance'
@@ -932,7 +952,8 @@ function calculateBill(values: BillInput) {
       values.waste +
       values.additional +
       values.previous_due -
-      values.advance_used
+      values.advance_used -
+      values.previous_credit
   );
 
   const balance = Math.max(
@@ -958,6 +979,27 @@ function calculateBill(values: BillInput) {
 export async function addBill(
   values: BillInput
 ) {
+  // Business rule: one bill per tenant per bill month.
+  // Older installed databases may not have received the original
+  // table-level UNIQUE constraint, so enforce the rule in code too.
+  const existingBill =
+    await db.getFirstAsync<Bill>(
+      `SELECT *
+       FROM bills
+       WHERE tenant_id = ? AND bill_month = ?
+       ORDER BY updated_at DESC
+       LIMIT 1`,
+      values.tenant_id,
+      values.bill_month
+    );
+
+  if (existingBill) {
+    return updateBill(
+      existingBill.id,
+      values
+    );
+  }
+
   const calculated =
     calculateBill(values);
 
@@ -987,6 +1029,7 @@ export async function addBill(
       waste,
       additional,
       previous_due,
+      previous_credit,
       advance_used,
       paid_amount,
       total,
@@ -998,7 +1041,7 @@ export async function addBill(
     ) VALUES (
       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
       ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-      ?, ?, ?
+      ?, ?, ?, ?
     )`,
     bill.id,
     bill.tenant_id,
@@ -1015,6 +1058,7 @@ export async function addBill(
     bill.waste,
     bill.additional,
     bill.previous_due,
+    bill.previous_credit,
     bill.advance_used,
     bill.paid_amount,
     bill.total,
@@ -1060,6 +1104,7 @@ export async function updateBill(
        waste = ?,
        additional = ?,
        previous_due = ?,
+       previous_credit = ?,
        advance_used = ?,
        paid_amount = ?,
        total = ?,
@@ -1082,6 +1127,7 @@ export async function updateBill(
     values.waste,
     values.additional,
     values.previous_due,
+    values.previous_credit,
     values.advance_used,
     values.paid_amount,
     calculated.total,
@@ -1172,8 +1218,9 @@ export async function replaceFromCloud(data: {
   documents: any[];
   bills: any[];
 }) {
-  await db.withTransactionAsync(
-    async () => {
+  const runReplace = async () => {
+    await db.withTransactionAsync(
+      async () => {
       await db.execAsync(`
         DELETE FROM bills;
         DELETE FROM documents;
@@ -1285,6 +1332,7 @@ export async function replaceFromCloud(data: {
             waste,
             additional,
             previous_due,
+            previous_credit,
             advance_used,
             paid_amount,
             total,
@@ -1296,7 +1344,7 @@ export async function replaceFromCloud(data: {
           ) VALUES (
             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
             ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-            ?, ?, ?
+            ?, ?, ?, ?
           )`,
           item.id,
           item.tenant_id,
@@ -1313,6 +1361,7 @@ export async function replaceFromCloud(data: {
           item.waste,
           item.additional,
           item.previous_due,
+          item.previous_credit ?? 0,
           item.advance_used,
           item.paid_amount,
           item.total,
@@ -1323,6 +1372,30 @@ export async function replaceFromCloud(data: {
           'synced'
         );
       }
+      }
+    );
+  };
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      await runReplace();
+      return;
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message.toLowerCase()
+          : String(error).toLowerCase();
+
+      if (
+        !message.includes('database is locked') ||
+        attempt === 2
+      ) {
+        throw error;
+      }
+
+      await new Promise((resolve) =>
+        setTimeout(resolve, 250 * (attempt + 1))
+      );
     }
-  );
+  }
 }
