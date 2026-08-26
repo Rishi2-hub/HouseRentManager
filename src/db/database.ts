@@ -1218,6 +1218,62 @@ export async function replaceFromCloud(data: {
   documents: any[];
   bills: any[];
 }) {
+  // Preserve working on-device photo URIs on the device that originally
+  // selected the image. Other/shared devices will use the signed HTTPS
+  // URL prepared by sync.ts. This avoids replacing a valid file:// image
+  // with a bare private Storage object path after synchronization.
+  const existingFloorPhotos =
+    await db.getAllAsync<{
+      id: string;
+      photo_uri: string | null;
+    }>('SELECT id, photo_uri FROM floors');
+
+  const existingRoomPhotos =
+    await db.getAllAsync<{
+      id: string;
+      photo_uri: string | null;
+    }>('SELECT id, photo_uri FROM rooms');
+
+  const existingTenantPhotos =
+    await db.getAllAsync<{
+      id: string;
+      photo_uri: string | null;
+    }>('SELECT id, photo_uri FROM tenants');
+
+  const floorPhotoMap = new Map(
+    existingFloorPhotos.map((x) => [
+      x.id,
+      x.photo_uri,
+    ])
+  );
+  const roomPhotoMap = new Map(
+    existingRoomPhotos.map((x) => [
+      x.id,
+      x.photo_uri,
+    ])
+  );
+  const tenantPhotoMap = new Map(
+    existingTenantPhotos.map((x) => [
+      x.id,
+      x.photo_uri,
+    ])
+  );
+
+  const keepLocalPhoto = (
+    current: string | null | undefined,
+    cloud: string | null | undefined
+  ) => {
+    if (
+      current?.startsWith('file:') ||
+      current?.startsWith('content:') ||
+      current?.startsWith('ph:')
+    ) {
+      return current;
+    }
+
+    return cloud ?? null;
+  };
+
   const runReplace = async () => {
     await db.withTransactionAsync(
       async () => {
@@ -1236,7 +1292,10 @@ export async function replaceFromCloud(data: {
           item.id,
           item.name,
           item.address,
-          item.photo_uri,
+          keepLocalPhoto(
+            floorPhotoMap.get(item.id),
+            item.photo_uri
+          ),
           item.created_at,
           item.updated_at,
           'synced'
@@ -1252,7 +1311,10 @@ export async function replaceFromCloud(data: {
           item.room_number,
           item.monthly_rent,
           item.status,
-          item.photo_uri,
+          keepLocalPhoto(
+            roomPhotoMap.get(item.id),
+            item.photo_uri
+          ),
           item.created_at,
           item.updated_at,
           'synced'
@@ -1290,7 +1352,10 @@ export async function replaceFromCloud(data: {
           item.move_in_date,
           item.monthly_rent,
           item.advance_deposit ?? 0,
-          item.photo_uri,
+          keepLocalPhoto(
+            tenantPhotoMap.get(item.id),
+            item.photo_uri
+          ),
           item.notes,
           item.created_at,
           item.updated_at,

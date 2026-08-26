@@ -92,9 +92,9 @@ android {
 
         // IMPORTANT:
         // Must be higher than the previously installed app.
-        versionCode 14
+        versionCode 15
 
-        versionName "1.2.0"
+        versionName "1.2.1"
 
         buildConfigField(
             "String",

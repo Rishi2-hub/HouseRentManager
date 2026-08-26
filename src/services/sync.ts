@@ -102,6 +102,59 @@ function isLocalFile(
   );
 }
 
+function isHttpUri(
+  uri: unknown
+): uri is string {
+  return (
+    typeof uri === 'string' &&
+    /^https?:\/\//i.test(uri)
+  );
+}
+
+/**
+ * Cloud photo_uri values are private Supabase Storage object paths,
+ * not directly renderable URLs. Convert them to short-lived signed
+ * HTTPS URLs whenever cloud records are pulled. Local/device URLs and
+ * already-signed HTTP(S) URLs are left unchanged.
+ */
+async function resolvePrivatePhotoUri(
+  uri: unknown
+): Promise<string | null> {
+  if (
+    typeof uri !== 'string' ||
+    !uri.trim()
+  ) {
+    return null;
+  }
+
+  if (isLocalFile(uri) || isHttpUri(uri)) {
+    return uri;
+  }
+
+  if (!supabase) {
+    return uri;
+  }
+
+  const { data, error } =
+    await supabase.storage
+      .from('tenant-private')
+      .createSignedUrl(
+        uri,
+        60 * 60 * 24 * 7
+      );
+
+  if (error || !data?.signedUrl) {
+    console.warn(
+      'Could not create signed photo URL for',
+      uri,
+      error
+    );
+    return uri;
+  }
+
+  return data.signedUrl;
+}
+
 async function uploadPrivateFile(
   householdId: string,
   entity: string,
@@ -211,8 +264,26 @@ async function loadCloudRecords() {
       throw error;
     }
 
-    cloudData[table] =
-      data ?? [];
+    const rows = data ?? [];
+
+    if (
+      table === 'floors' ||
+      table === 'rooms' ||
+      table === 'tenants'
+    ) {
+      cloudData[table] =
+        await Promise.all(
+          rows.map(async (item: any) => ({
+            ...item,
+            photo_uri:
+              await resolvePrivatePhotoUri(
+                item.photo_uri
+              ),
+          }))
+        );
+    } else {
+      cloudData[table] = rows;
+    }
   }
 
   return cloudData;
