@@ -121,12 +121,6 @@ export function BillsScreen({
   const [tenantPickerOpen, setTenantPickerOpen] =
     useState(false);
 
-  const [historyMonth, setHistoryMonth] =
-    useState('');
-
-  const [historyFolder, setHistoryFolder] =
-    useState<'unpaid' | 'paid'>('unpaid');
-
   const [billMonth, setBillMonth] =
     useState(previousBsMonth());
 
@@ -185,54 +179,6 @@ export function BillsScreen({
       () => recentBsMonths(),
       []
     );
-
-  const historyMonths =
-    useMemo(
-      () =>
-        Array.from(
-          new Set(
-            bills.map(
-              (bill) => bill.bill_month
-            )
-          )
-        ).sort(
-          (first, second) =>
-            second.localeCompare(first)
-        ),
-      [bills]
-    );
-
-  const activeHistoryMonth =
-    historyMonth &&
-    historyMonths.includes(historyMonth)
-      ? historyMonth
-      : historyMonths[0] ?? '';
-
-  const historyMonthBills =
-    bills.filter(
-      (bill) =>
-        bill.bill_month ===
-        activeHistoryMonth
-    );
-
-  const unpaidHistoryBills =
-    historyMonthBills.filter(
-      (bill) =>
-        bill.status !== 'paid' ||
-        Number(bill.balance || 0) > 0
-    );
-
-  const paidHistoryBills =
-    historyMonthBills.filter(
-      (bill) =>
-        bill.status === 'paid' &&
-        Number(bill.balance || 0) <= 0
-    );
-
-  const visibleHistoryBills =
-    historyFolder === 'paid'
-      ? paidHistoryBills
-      : unpaidHistoryBills;
 
   const selectedTenant =
     tenants.find(
@@ -816,13 +762,6 @@ export function BillsScreen({
           : 'Bill generated';
 
       await reload();
-
-      setHistoryMonth(billMonth);
-      setHistoryFolder(
-        calculatedBalance <= 0
-          ? 'paid'
-          : 'unpaid'
-      );
 
       Alert.alert(
         successTitle,
@@ -2440,419 +2379,239 @@ export function BillsScreen({
         )}
       </Card>
 
-      {/* Generated bill history grouped by month and payment folder */}
+      {/* Generated bill history */}
 
-      <View style={styles.historyHeadingRow}>
-        <View>
-          <Text style={styles.historyTitle}>
-            Generated bills
-          </Text>
-          <Text style={styles.historySubtitle}>
-            Select a month, then open Unpaid or Paid bills.
-          </Text>
-        </View>
+      <Text style={styles.historyTitle}>
+        Generated bills
+      </Text>
 
-        <View style={styles.historyCountBadge}>
-          <Text style={styles.historyCountText}>
-            {bills.length} total
-          </Text>
-        </View>
-      </View>
+      {bills.map((bill) => {
+        const tenantName =
+          getTenantName(
+            bill.tenant_id
+          );
 
-      {historyMonths.length > 0 ? (
-        <>
-          <Card>
-            <Text style={styles.historySectionLabel}>
-              Bill month
-            </Text>
+        const consumedUnits =
+          Math.max(
+            0,
+            Number(
+              bill.current_electricity_unit ||
+                0
+            ) -
+              Number(
+                bill.previous_electricity_unit ||
+                  0
+              )
+          );
 
-            <View style={styles.historyMonths}>
-              {historyMonths.map((month) => {
-                const monthBills =
-                  bills.filter(
-                    (bill) =>
-                      bill.bill_month === month
-                  );
+        const depositSummary =
+          getDepositSummary(
+            bill.tenant_id
+          );
 
-                const monthUnpaid =
-                  monthBills.filter(
-                    (bill) =>
-                      bill.status !== 'paid' ||
-                      Number(bill.balance || 0) > 0
-                  ).length;
+        return (
+          <Card key={bill.id}>
+            <View
+              style={styles.billHeader}
+            >
+              <View
+                style={
+                  styles.billInformation
+                }
+              >
+                <Text
+                  style={
+                    styles.billTenantName
+                  }
+                >
+                  {tenantName}
+                </Text>
 
-                const selected =
-                  activeHistoryMonth === month;
+                <Text
+                  style={styles.billMonth}
+                >
+                  {bsMonthLabel(
+                    bill.bill_month
+                  )}
+                </Text>
 
-                return (
-                  <Pressable
-                    key={month}
-                    onPress={() => {
-                      setHistoryMonth(month);
-                      setHistoryFolder('unpaid');
-                    }}
-                    style={({ pressed }) => [
-                      styles.historyMonthChip,
-                      selected &&
-                        styles.historyMonthChipSelected,
-                      pressed &&
-                        styles.historyPressed,
-                    ]}
-                  >
-                    <Text
-                      numberOfLines={1}
-                      style={[
-                        styles.historyMonthChipText,
-                        selected &&
-                          styles.historyMonthChipTextSelected,
-                      ]}
-                    >
-                      {bsMonthLabel(month)}
-                    </Text>
+                <Text
+                  style={styles.billStatus}
+                >
+                  Status:{' '}
+                  {bill.status.toUpperCase()}
+                </Text>
 
-                    <Text
-                      style={[
-                        styles.historyMonthChipMeta,
-                        selected &&
-                          styles.historyMonthChipMetaSelected,
-                      ]}
-                    >
-                      {monthBills.length}{' '}
-                      {monthBills.length === 1
-                        ? 'bill'
-                        : 'bills'}
-                      {' · '}
-                      {monthUnpaid > 0
-                        ? `${monthUnpaid} unpaid`
-                        : 'all paid'}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+                <Text
+                  style={styles.billStatus}
+                >
+                  Rent method:{' '}
+                  {bill.billing_mode ===
+                  'by_days'
+                    ? `By days (${bill.billed_days}/${bill.month_days})`
+                    : 'Full month'}
+                </Text>
+
+                <Text
+                  style={styles.billStatus}
+                >
+                  Rent charged: NPR{' '}
+                  {Number(
+                    bill.rent
+                  ).toLocaleString()}
+                </Text>
+
+                <Text
+                  style={styles.billStatus}
+                >
+                  Electricity:{' '}
+                  {consumedUnits} units
+                  {' · '}NPR{' '}
+                  {Number(
+                    bill.electricity
+                  ).toLocaleString()}
+                </Text>
+
+                <Text
+                  style={styles.billStatus}
+                >
+                  Previous month credit: NPR{' '}
+                  {Number(
+                    bill.previous_credit || 0
+                  ).toLocaleString()}
+                </Text>
+
+                <Text
+                  style={styles.billStatus}
+                >
+                  Paid: NPR{' '}
+                  {Number(
+                    bill.paid_amount
+                  ).toLocaleString()}
+                </Text>
+
+                <Text
+                  style={
+                    styles.billBalance
+                  }
+                >
+                  Balance: NPR{' '}
+                  {Number(
+                    bill.balance
+                  ).toLocaleString()}
+                </Text>
+              </View>
+
+              <Money
+                value={Number(
+                  bill.total
+                )}
+              />
+            </View>
+
+            <View style={styles.depositCard}>
+              <Text style={styles.depositTitle}>
+                Security advance deposit
+              </Text>
+
+              <View style={styles.depositRow}>
+                <Text style={styles.depositLabel}>
+                  Deposit received
+                </Text>
+
+                <Text style={styles.depositAmount}>
+                  NPR{' '}
+                  {depositSummary.depositReceived.toLocaleString()}
+                </Text>
+              </View>
+
+              <View style={styles.depositRow}>
+                <Text style={styles.depositLabel}>
+                  Used or deducted
+                </Text>
+
+                <Text style={styles.depositAmount}>
+                  NPR{' '}
+                  {depositSummary.depositUsed.toLocaleString()}
+                </Text>
+              </View>
+
+              <View style={styles.depositRow}>
+                <Text style={styles.depositLabel}>
+                  Remaining refundable deposit
+                </Text>
+
+                <Text style={styles.depositRemaining}>
+                  NPR{' '}
+                  {depositSummary.depositRemaining.toLocaleString()}
+                </Text>
+              </View>
+
+              <Text style={styles.depositNotice}>
+                This deposit is separate from the monthly bill. The
+                remaining amount will normally be returned when the tenant
+                leaves, after final-month dues, unpaid charges, or any
+                owner-assessed damage to the floor, room, or flat is
+                deducted.
+              </Text>
+            </View>
+
+            <View style={styles.exportActions}>
+              <View style={styles.exportAction}>
+                <Button
+                  title="Download PDF"
+                  kind="secondary"
+                  onPress={() =>
+                    downloadBillPdf(
+                      bill
+                    )
+                  }
+                />
+              </View>
+
+              <View style={styles.exportAction}>
+                <Button
+                  title="Download PNG"
+                  kind="secondary"
+                  onPress={() =>
+                    downloadBillPng(
+                      bill
+                    )
+                  }
+                />
+              </View>
+            </View>
+
+            <View style={styles.actions}>
+              <View style={styles.action}>
+                <Button
+                  title="Edit"
+                  kind="secondary"
+                  onPress={() =>
+                    startEditingBill(
+                      bill
+                    )
+                  }
+                />
+              </View>
+
+              <View style={styles.action}>
+                <Button
+                  title="Delete"
+                  kind="danger"
+                  onPress={() =>
+                    confirmDeleteBill(
+                      bill
+                    )
+                  }
+                />
+              </View>
             </View>
           </Card>
+        );
+      })}
 
-          <View style={styles.billFolderTabs}>
-            <Pressable
-              onPress={() =>
-                setHistoryFolder('unpaid')
-              }
-              style={[
-                styles.billFolderTab,
-                historyFolder === 'unpaid' &&
-                  styles.billFolderTabUnpaidSelected,
-              ]}
-            >
-              <Text style={styles.billFolderIcon}>▰</Text>
-              <View style={styles.billFolderTextBlock}>
-                <Text
-                  style={[
-                    styles.billFolderTitle,
-                    historyFolder === 'unpaid' &&
-                      styles.billFolderTitleUnpaid,
-                  ]}
-                >
-                  Unpaid bills
-                </Text>
-                <Text style={styles.billFolderMeta}>
-                  Due or partially paid
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.billFolderCount,
-                  historyFolder === 'unpaid' &&
-                    styles.billFolderCountUnpaid,
-                ]}
-              >
-                <Text style={styles.billFolderCountText}>
-                  {unpaidHistoryBills.length}
-                </Text>
-              </View>
-            </Pressable>
-
-            <Pressable
-              onPress={() =>
-                setHistoryFolder('paid')
-              }
-              style={[
-                styles.billFolderTab,
-                historyFolder === 'paid' &&
-                  styles.billFolderTabPaidSelected,
-              ]}
-            >
-              <Text style={styles.billFolderIcon}>▰</Text>
-              <View style={styles.billFolderTextBlock}>
-                <Text
-                  style={[
-                    styles.billFolderTitle,
-                    historyFolder === 'paid' &&
-                      styles.billFolderTitlePaid,
-                  ]}
-                >
-                  Paid bills
-                </Text>
-                <Text style={styles.billFolderMeta}>
-                  Fully settled bills
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.billFolderCount,
-                  historyFolder === 'paid' &&
-                    styles.billFolderCountPaid,
-                ]}
-              >
-                <Text style={styles.billFolderCountText}>
-                  {paidHistoryBills.length}
-                </Text>
-              </View>
-            </Pressable>
-          </View>
-
-          <Text style={styles.activeFolderHeading}>
-            {activeHistoryMonth
-              ? bsMonthLabel(activeHistoryMonth)
-              : ''}
-            {' · '}
-            {historyFolder === 'paid'
-              ? 'Paid bills'
-              : 'Unpaid bills'}
-          </Text>
-
-          {visibleHistoryBills.map((bill) => {
-            const tenantName =
-              getTenantName(
-                bill.tenant_id
-              );
-
-            const consumedUnits =
-              Math.max(
-                0,
-                Number(
-                  bill.current_electricity_unit ||
-                    0
-                ) -
-                  Number(
-                    bill.previous_electricity_unit ||
-                      0
-                  )
-              );
-
-            const depositSummary =
-              getDepositSummary(
-                bill.tenant_id
-              );
-
-            return (
-              <Card key={bill.id}>
-                <View
-                  style={styles.billHeader}
-                >
-                  <View
-                    style={
-                      styles.billInformation
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.billTenantName
-                      }
-                    >
-                      {tenantName}
-                    </Text>
-
-                    <Text
-                      style={styles.billMonth}
-                    >
-                      {bsMonthLabel(
-                        bill.bill_month
-                      )}
-                    </Text>
-
-                    <Text
-                      style={styles.billStatus}
-                    >
-                      Status:{' '}
-                      {bill.status.toUpperCase()}
-                    </Text>
-
-                    <Text
-                      style={styles.billStatus}
-                    >
-                      Rent method:{' '}
-                      {bill.billing_mode ===
-                      'by_days'
-                        ? `By days (${bill.billed_days}/${bill.month_days})`
-                        : 'Full month'}
-                    </Text>
-
-                    <Text
-                      style={styles.billStatus}
-                    >
-                      Rent charged: NPR{' '}
-                      {Number(
-                        bill.rent
-                      ).toLocaleString()}
-                    </Text>
-
-                    <Text
-                      style={styles.billStatus}
-                    >
-                      Electricity:{' '}
-                      {consumedUnits} units
-                      {' · '}NPR{' '}
-                      {Number(
-                        bill.electricity
-                      ).toLocaleString()}
-                    </Text>
-
-                    <Text
-                      style={styles.billStatus}
-                    >
-                      Previous month credit: NPR{' '}
-                      {Number(
-                        bill.previous_credit || 0
-                      ).toLocaleString()}
-                    </Text>
-
-                    <Text
-                      style={styles.billStatus}
-                    >
-                      Paid: NPR{' '}
-                      {Number(
-                        bill.paid_amount
-                      ).toLocaleString()}
-                    </Text>
-
-                    <Text
-                      style={
-                        styles.billBalance
-                      }
-                    >
-                      Balance: NPR{' '}
-                      {Number(
-                        bill.balance
-                      ).toLocaleString()}
-                    </Text>
-                  </View>
-
-                  <Money
-                    value={Number(
-                      bill.total
-                    )}
-                  />
-                </View>
-
-                <View style={styles.depositCard}>
-                  <Text style={styles.depositTitle}>
-                    Security advance deposit
-                  </Text>
-
-                  <View style={styles.depositRow}>
-                    <Text style={styles.depositLabel}>
-                      Deposit received
-                    </Text>
-                    <Text style={styles.depositAmount}>
-                      NPR {depositSummary.depositReceived.toLocaleString()}
-                    </Text>
-                  </View>
-
-                  <View style={styles.depositRow}>
-                    <Text style={styles.depositLabel}>
-                      Used or deducted
-                    </Text>
-                    <Text style={styles.depositAmount}>
-                      NPR {depositSummary.depositUsed.toLocaleString()}
-                    </Text>
-                  </View>
-
-                  <View style={styles.depositRow}>
-                    <Text style={styles.depositLabel}>
-                      Remaining refundable deposit
-                    </Text>
-                    <Text style={styles.depositRemaining}>
-                      NPR {depositSummary.depositRemaining.toLocaleString()}
-                    </Text>
-                  </View>
-
-                  <Text style={styles.depositNotice}>
-                    This deposit is separate from the monthly bill. The
-                    remaining amount will normally be returned when the tenant
-                    leaves, after final-month dues, unpaid charges, or any
-                    owner-assessed damage to the floor, room, or flat is
-                    deducted.
-                  </Text>
-                </View>
-
-                <View style={styles.exportActions}>
-                  <View style={styles.exportAction}>
-                    <Button
-                      title="Download PDF"
-                      kind="secondary"
-                      onPress={() =>
-                        downloadBillPdf(
-                          bill
-                        )
-                      }
-                    />
-                  </View>
-
-                  <View style={styles.exportAction}>
-                    <Button
-                      title="Download PNG"
-                      kind="secondary"
-                      onPress={() =>
-                        downloadBillPng(
-                          bill
-                        )
-                      }
-                    />
-                  </View>
-                </View>
-
-                <View style={styles.actions}>
-                  <View style={styles.action}>
-                    <Button
-                      title="Edit"
-                      kind="secondary"
-                      onPress={() =>
-                        startEditingBill(
-                          bill
-                        )
-                      }
-                    />
-                  </View>
-
-                  <View style={styles.action}>
-                    <Button
-                      title="Delete"
-                      kind="danger"
-                      onPress={() =>
-                        confirmDeleteBill(
-                          bill
-                        )
-                      }
-                    />
-                  </View>
-                </View>
-              </Card>
-            );
-          })}
-
-          {visibleHistoryBills.length === 0 && (
-            <Card>
-              <Empty
-                text={
-                  historyFolder === 'unpaid'
-                    ? 'No unpaid bills for this month. All generated bills are paid.'
-                    : 'No paid bills for this month yet.'
-                }
-              />
-            </Card>
-          )}
-        </>
-      ) : (
+      {bills.length === 0 && (
         <Empty text="No monthly bills generated." />
       )}
 
@@ -3300,180 +3059,6 @@ const styles = StyleSheet.create({
 
   exportAction: {
     width: '48%',
-  },
-
-  historyHeadingRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    gap: 12,
-    marginTop: 8,
-    marginBottom: 10,
-  },
-
-  historySubtitle: {
-    color: colors.muted,
-    fontSize: 11,
-    lineHeight: 16,
-    marginTop: 2,
-  },
-
-  historyCountBadge: {
-    backgroundColor: '#EAF7F1',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-
-  historyCountText: {
-    color: colors.primary,
-    fontSize: 10,
-    fontWeight: '900',
-  },
-
-  historySectionLabel: {
-    color: colors.muted,
-    fontSize: 10,
-    fontWeight: '900',
-    textTransform: 'uppercase',
-    letterSpacing: 1,
-    marginBottom: 9,
-  },
-
-  historyMonths: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-
-  historyMonthChip: {
-    minWidth: '47%',
-    flexGrow: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    backgroundColor: '#F8FBFA',
-    paddingHorizontal: 11,
-    paddingVertical: 10,
-  },
-
-  historyMonthChipSelected: {
-    backgroundColor: colors.primaryDark,
-    borderColor: colors.primaryDark,
-  },
-
-  historyMonthChipText: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: '900',
-  },
-
-  historyMonthChipTextSelected: {
-    color: '#FFFFFF',
-  },
-
-  historyMonthChipMeta: {
-    color: colors.muted,
-    fontSize: 9,
-    marginTop: 3,
-  },
-
-  historyMonthChipMetaSelected: {
-    color: '#CFE9DF',
-  },
-
-  historyPressed: {
-    opacity: 0.78,
-  },
-
-  billFolderTabs: {
-    flexDirection: 'row',
-    gap: 9,
-    marginBottom: 12,
-  },
-
-  billFolderTab: {
-    flex: 1,
-    minHeight: 66,
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    gap: 8,
-  },
-
-  billFolderTabUnpaidSelected: {
-    backgroundColor: '#FFF1F2',
-    borderColor: '#EFB8BC',
-  },
-
-  billFolderTabPaidSelected: {
-    backgroundColor: '#EAF7F1',
-    borderColor: '#B9DFCF',
-  },
-
-  billFolderIcon: {
-    color: colors.primary,
-    fontSize: 16,
-  },
-
-  billFolderTextBlock: {
-    flex: 1,
-    minWidth: 0,
-  },
-
-  billFolderTitle: {
-    color: colors.text,
-    fontSize: 11,
-    fontWeight: '900',
-  },
-
-  billFolderTitleUnpaid: {
-    color: '#A92E38',
-  },
-
-  billFolderTitlePaid: {
-    color: colors.primary,
-  },
-
-  billFolderMeta: {
-    color: colors.muted,
-    fontSize: 8,
-    marginTop: 2,
-  },
-
-  billFolderCount: {
-    minWidth: 25,
-    height: 25,
-    borderRadius: 13,
-    backgroundColor: '#EEF2F0',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  billFolderCountUnpaid: {
-    backgroundColor: '#FFDADD',
-  },
-
-  billFolderCountPaid: {
-    backgroundColor: '#CFEEDD',
-  },
-
-  billFolderCountText: {
-    color: colors.text,
-    fontSize: 10,
-    fontWeight: '900',
-  },
-
-  activeFolderHeading: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '900',
-    marginBottom: 10,
   },
 
   pngCaptureHost: {

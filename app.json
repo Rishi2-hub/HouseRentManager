@@ -3,13 +3,13 @@
     "name": "House Rent Manager",
     "slug": "house-rent-manager",
     "scheme": "houserentmanager",
-    "version": "1.2.1",
+    "version": "1.2.2",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
 
     "android": {
       "package": "com.rishi.houserentmanager",
-      "versionCode": 15,
+      "versionCode": 16,
       "permissions": [
         "CAMERA",
         "READ_MEDIA_IMAGES"

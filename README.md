@@ -1,25 +1,25 @@
-# Final two-user household update
+# House Rent Manager Android — Bill Month & Paid/Unpaid Folders v1.3
 
-This package is matched to the supplied Supabase migrations:
-001_initial.sql
-002_shared_households.sql
-003_nepali_billing_and_deposit.sql
+This Android update changes only the Bills history UI. It groups generated bills by Nepali month and adds Paid / Unpaid folders for each month. Existing database, Supabase, SQLite sync, PDF/PNG, tenant data, and household data remain unchanged.
 
-Apply the new migration:
-004_two_user_households_and_owner_details.sql
+## Apply
 
-Main behavior:
-- Unlimited independent app accounts may register.
-- Each household is limited to 2 accounts: owner + one member.
-- Household sharing code is numeric and 6 digits.
-- Settings shows signed-in account, owner details, household members, and 2/2 status.
-- Each account can change its own password from Settings.
-- A new/empty account can join an owner's household.
-- An account that already has rental data is prevented from silently switching households.
+```powershell
+cd <extracted-folder>
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+Unblock-File .\apply-app-bill-folders.ps1
+.\apply-app-bill-folders.ps1
 
-Recommended sequence:
-1. Back up Supabase.
-2. Run 004_two_user_households_and_owner_details.sql in Supabase SQL Editor.
-3. Replace src/screens/SettingsScreen.tsx with the included file.
-4. Keep the supplied AuthScreen.tsx, database.ts, sync.ts and supabase.ts.
-5. Test with two verified accounts before building the release APK.
+cd D:\Projects\HouseRentManager
+npx tsc --noEmit
+```
+
+If typecheck passes:
+
+```powershell
+cd D:\Projects\HouseRentManager\android
+.\gradlew.bat assembleRelease
+adb install -r ".\app\build\outputs\apk\release\app-release.apk"
+```
+
+Do not uninstall the existing app. Do not run `expo prebuild` for this UI-only update.

@@ -1,2 +1,21 @@
-export const colors={primary:'#216E55',primaryDark:'#174F3E',accent:'#DFF4EA',bg:'#F4F7F6',card:'#FFFFFF',text:'#17211E',muted:'#6B7B75',border:'#DDE6E2',danger:'#C53D46',warning:'#B7791F',success:'#1F8A5B'};
-export const shadow={shadowColor:'#17211E',shadowOpacity:0.08,shadowRadius:10,shadowOffset:{width:0,height:4},elevation:2};
+export const colors = {
+  primary: '#0F766E',
+  primaryDark: '#0F3D35',
+  accent: '#ECFDF5',
+  bg: '#F5F7FA',
+  card: '#FFFFFF',
+  text: '#12211D',
+  muted: '#6B7C76',
+  border: '#E2E9E6',
+  danger: '#C2414B',
+  warning: '#A16207',
+  success: '#138A63',
+};
+
+export const shadow = {
+  shadowColor: '#0F2D26',
+  shadowOpacity: 0.07,
+  shadowRadius: 12,
+  shadowOffset: { width: 0, height: 5 },
+  elevation: 2,
+};

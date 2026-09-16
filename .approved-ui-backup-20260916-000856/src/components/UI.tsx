@@ -1,0 +1,10 @@
+import React from 'react';
+import {Pressable,StyleSheet,Text,TextInput,TextInputProps,View,ViewProps} from 'react-native';
+import {colors,shadow} from '../theme';
+export const Card=({children,style,...p}:ViewProps)=><View style={[s.card,style]} {...p}>{children}</View>;
+export const Label=({children}:{children:React.ReactNode})=><Text style={s.label}>{children}</Text>;
+export const Input=(p:TextInputProps)=><TextInput placeholderTextColor={colors.muted} style={[s.input,p.multiline&&{height:88,textAlignVertical:'top'},p.style]} {...p}/>;
+export const Button=({title,onPress,kind='primary',disabled=false}:{title:string;onPress:()=>void;kind?:'primary'|'secondary'|'danger';disabled?:boolean})=><Pressable disabled={disabled} onPress={onPress} style={[s.button,kind==='secondary'&&s.secondary,kind==='danger'&&s.danger,disabled&&{opacity:.45}]}><Text style={[s.buttonText,kind==='secondary'&&{color:colors.primary}]}>{title}</Text></Pressable>;
+export const Money=({value}:{value:number})=><Text style={s.money}>NPR {value.toLocaleString()}</Text>;
+export const Empty=({text}:{text:string})=><Text style={s.empty}>{text}</Text>;
+const s=StyleSheet.create({card:{backgroundColor:colors.card,borderRadius:16,padding:16,marginBottom:12,borderWidth:1,borderColor:colors.border,...shadow},label:{fontSize:13,fontWeight:'700',color:colors.text,marginBottom:6},input:{height:48,borderWidth:1,borderColor:colors.border,borderRadius:12,paddingHorizontal:13,fontSize:15,color:colors.text,backgroundColor:'#fff',marginBottom:12},button:{minHeight:46,borderRadius:12,backgroundColor:colors.primary,alignItems:'center',justifyContent:'center',paddingHorizontal:16,marginBottom:10},secondary:{backgroundColor:colors.accent,borderWidth:1,borderColor:'#B9DFCF'},danger:{backgroundColor:colors.danger},buttonText:{color:'#fff',fontWeight:'800',fontSize:15},money:{fontSize:16,fontWeight:'800',color:colors.primaryDark},empty:{textAlign:'center',color:colors.muted,paddingVertical:24}});

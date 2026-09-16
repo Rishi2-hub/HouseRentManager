@@ -1,4 +1,3 @@
-
 import React, {
   useCallback,
   useEffect,
@@ -8,10 +7,8 @@ import React, {
 import {
   ActivityIndicator,
   Linking,
-  Platform,
   Pressable,
   SafeAreaView,
-  StatusBar as NativeStatusBar,
   ScrollView,
   StyleSheet,
   Text,
@@ -100,9 +97,6 @@ export default function App() {
 
   const [loggedIn, setLoggedIn] =
     useState(false);
-
-  const [displayName, setDisplayName] =
-    useState('Owner');
 
   const [offlinePreview, setOfflinePreview] =
     useState(false);
@@ -293,11 +287,6 @@ export default function App() {
             data.session &&
             active
           ) {
-            const name =
-              data.session.user.user_metadata?.full_name ||
-              data.session.user.email?.split('@')[0] ||
-              'Owner';
-            setDisplayName(String(name));
             await openAccount(
               data.session.user.id
             );
@@ -338,12 +327,6 @@ export default function App() {
           }
 
           if (session) {
-            const name =
-              session.user.user_metadata?.full_name ||
-              session.user.email?.split('@')[0] ||
-              'Owner';
-            setDisplayName(String(name));
-
             /*
              * Run account loading outside
              * the Supabase auth callback.
@@ -355,7 +338,6 @@ export default function App() {
             }, 0);
           } else {
             setLoggedIn(false);
-            setDisplayName('Owner');
           }
         }
       ).data.subscription;
@@ -405,7 +387,6 @@ export default function App() {
         );
       } finally {
         setLoggedIn(false);
-        setDisplayName('Owner');
         setOfflinePreview(false);
         setPasswordRecovery(false);
         setSelectedTab('Dashboard');
@@ -468,7 +449,7 @@ export default function App() {
     <SafeAreaView
       style={styles.safeArea}
     >
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
 
       {/* Application header */}
 
@@ -483,7 +464,7 @@ export default function App() {
               styles.brandSubtitle
             }
           >
-            Manage smarter · rent better
+            Rental management system
           </Text>
         </View>
 
@@ -493,7 +474,7 @@ export default function App() {
               styles.localBadgeText
             }
           >
-            ● Cloud + local
+            ● Local-first
           </Text>
         </View>
       </View>
@@ -515,7 +496,6 @@ export default function App() {
             rooms={rooms}
             tenants={tenants}
             bills={bills}
-            displayName={displayName}
             onNavigate={
               setSelectedTab
             }
@@ -627,99 +607,97 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.bg,
   },
+
   loading: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bg,
   },
+
   loadingText: {
     color: colors.muted,
     marginTop: 12,
-    fontWeight: '800',
+    fontWeight: '700',
   },
+
   topBar: {
-    minHeight: 58,
-    backgroundColor: '#075E54',
+    minHeight: 66,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#0A5149',
+    borderBottomColor: colors.border,
     paddingHorizontal: 18,
-    paddingTop: Platform.OS === 'android' ? (NativeStatusBar.currentHeight ?? 0) + 7 : 8,
-    paddingBottom: 8,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: '#0F2D26',
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
   },
+
   brand: {
-    fontSize: 15.5,
+    fontSize: 17,
     fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: -0.25,
+    color: colors.primaryDark,
   },
+
   brandSubtitle: {
-    fontSize: 9,
-    color: '#CDE9E1',
-    marginTop: 3,
+    fontSize: 10,
+    color: colors.muted,
+    marginTop: 2,
   },
+
   localBadge: {
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    backgroundColor: colors.accent,
     borderRadius: 20,
-    paddingHorizontal: 9,
+    paddingHorizontal: 10,
     paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.18)',
   },
+
   localBadgeText: {
-    fontSize: 8.5,
-    color: '#DDF8EE',
-    fontWeight: '900',
+    fontSize: 10,
+    color: colors.success,
+    fontWeight: '800',
   },
+
   content: {
-    padding: 12,
-    paddingTop: 13,
-    paddingBottom: 34,
+    padding: 16,
+    paddingBottom: 30,
   },
+
   navigation: {
-    minHeight: 64,
+    minHeight: 68,
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: colors.border,
     flexDirection: 'row',
-    paddingHorizontal: 6,
-    paddingTop: 6,
-    paddingBottom: 4,
-    shadowColor: '#0F2D26',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: -4 },
-    elevation: 6,
+    paddingHorizontal: 4,
+    paddingTop: 5,
+    paddingBottom: 3,
   },
+
   navigationItem: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 13,
+    borderRadius: 12,
     paddingHorizontal: 2,
-    paddingVertical: 4,
   },
+
   activeNavigationItem: {
     backgroundColor: colors.accent,
   },
+
   navigationIcon: {
-    fontSize: 16,
-    color: '#8A9A94',
+    fontSize: 18,
+    color: colors.muted,
     marginBottom: 3,
   },
+
   navigationText: {
-    fontSize: 8.5,
-    color: '#7A8A84',
+    fontSize: 9,
+    color: colors.muted,
     fontWeight: '700',
   },
+
   activeNavigationText: {
     color: colors.primary,
     fontWeight: '900',
